@@ -1,0 +1,777 @@
+```{r}
+install.packages("rsconnect")
+
+```
+
+```{r}
+rsconnect::setAccountInfo(name='wpc01l-lily-cramer', token='94EC314BEEFAF59BE5BBA13FB0001A64', secret='M2jrcg2UpdUIzkDknmb+M4YFxbroVSKsj2xRLnlF')
+```
+
+
+```{r}
+
+dir.create("~/Downloads/ncaa_pool_app")
+file.copy("~/Downloads/app_2.R", "~/Downloads/ncaa_pool_app/app.R")
+file.copy("~/Downloads/pool_df.rds", "~/Downloads/ncaa_pool_app/pool_df.rds")
+```
+
+
+```{r}
+
+rsconnect::deployApp("~/Downloads/ncaa_pool_app")
+```
+
+```{r}
+library(shiny)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(DT)
+
+
+pool_df <- data.frame(
+  LOCATION = c(
+    "Christiansburg Aquatic Center",
+    "McAuley Aquatic Center",
+    "UVA Aquatic & Fitness Center",
+    "Stephen O'Connor Center Natatorium",
+    "Avery Aquatic Center",
+    "Councilman Billingsley Aquatic Center",
+    "McCorkle Aquatic Pavilion",
+    "Allan Jones Intercollegiate Aquatic Center",
+    "Jean K. Freeman Aquatic Center",
+    "Gabrielsen Natatorium",
+    "Uytengsu Aquatics Center",
+    "Katherine Moran Coleman Aquatic Center",
+    "University of Houston CWRC",
+    "Greensboro Aquatic Center",
+    "Florida Aquatics Swimming & Training",
+    "Lee and Joe Jamail Texas Swimming Center",
+    "Piscine Olympique de Montreal",
+    "Commodore Challenge Center",
+    "Farida Haidari Aquatic Center",
+    "Titan Aquatics Center"
+  ),
+  effect = c(-0.45, -0.38, -0.31, -0.27, -0.22, -0.18, -0.14,
+             -0.10, -0.07, -0.03, 0.02, 0.06, 0.09, 0.13,
+              0.17, 0.21, 0.25, 0.30, 0.35, 0.41),
+  Depth_in = c(78, 84, 90, 96, 72, 108, 84, 90,
+               96, 84, 90, 108, 72, 96, 84, 90, 96, 78, 84, 72),
+  Altitude_ft = c(2080, 320, 571, 860, 30, 860, 780, 980,
+                  830, 120, 150, 460, 80, 790, 70, 489, 118, 597, 430, 240),
+  Age_years = c(12, 22, 18, 35, 8, 42, 28, 15,
+                30, 45, 20, 10, 38, 5, 14, 55, 25, 32, 16, 40),
+  Lanes = c(10, 10, 10, 8, 10, 10, 8, 10,
+            10, 8, 10, 10, 8, 10, 10, 10, 10, 8, 10, 8),
+  Indoor = c(TRUE, TRUE, TRUE, TRUE, FALSE, TRUE, TRUE, TRUE,
+             TRUE, TRUE, FALSE, TRUE, TRUE, TRUE, FALSE, TRUE,
+             TRUE, TRUE, TRUE, FALSE),
+  stringsAsFactors = FALSE
+)
+
+# ── UI ────────────────────────────────────────────────────────────────────────
+ui <- fluidPage(
+
+  tags$head(
+    tags$style(HTML("
+      @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: 'DM Sans', sans-serif;
+        background-color: #f0f4f8;
+        color: #1a2332;
+      }
+
+      /* ── Header ── */
+      .app-header {
+        background: linear-gradient(135deg, #0a1628 0%, #1a3a5c 60%, #0d5c8a 100%);
+        color: white;
+        padding: 36px 48px 28px;
+        border-bottom: 3px solid #1e90c8;
+        position: relative;
+        overflow: hidden;
+      }
+      .app-header::before {
+        content: '';
+        position: absolute;
+        top: -60px; right: -60px;
+        width: 280px; height: 280px;
+        border-radius: 50%;
+        background: rgba(30,144,200,0.12);
+        pointer-events: none;
+      }
+      .app-header::after {
+        content: '';
+        position: absolute;
+        bottom: -80px; left: 30%;
+        width: 200px; height: 200px;
+        border-radius: 50%;
+        background: rgba(30,144,200,0.07);
+        pointer-events: none;
+      }
+      .header-title {
+        font-family: 'DM Serif Display', serif;
+        font-size: 2.1rem;
+        letter-spacing: -0.5px;
+        margin-bottom: 6px;
+        position: relative;
+      }
+      .header-sub {
+        font-size: 0.92rem;
+        opacity: 0.72;
+        font-weight: 300;
+        letter-spacing: 0.5px;
+        position: relative;
+      }
+      .header-badge {
+        display: inline-block;
+        background: rgba(30,144,200,0.3);
+        border: 1px solid rgba(30,144,200,0.5);
+        border-radius: 20px;
+        padding: 3px 12px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-bottom: 10px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      /* ── Layout ── */
+      .main-container {
+        display: flex;
+        gap: 0;
+        min-height: calc(100vh - 130px);
+      }
+
+      /* ── Sidebar ── */
+      .sidebar-panel {
+        width: 280px;
+        min-width: 280px;
+        background: #ffffff;
+        border-right: 1px solid #dde3eb;
+        padding: 28px 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .filter-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: #6b7a8d;
+        margin-bottom: 8px;
+      }
+      .filter-group {
+        border-bottom: 1px solid #eef1f5;
+        padding-bottom: 20px;
+      }
+      .filter-group:last-child { border-bottom: none; }
+
+      /* Override Shiny widget styles */
+      .selectize-input {
+        border: 1.5px solid #dde3eb !important;
+        border-radius: 8px !important;
+        font-family: 'DM Sans', sans-serif !important;
+        font-size: 0.88rem !important;
+        padding: 8px 12px !important;
+        box-shadow: none !important;
+        background: #f8fafc !important;
+      }
+      .selectize-input.focus {
+        border-color: #1e90c8 !important;
+        box-shadow: 0 0 0 3px rgba(30,144,200,0.12) !important;
+      }
+      .irs--shiny .irs-bar { background: #1e90c8 !important; }
+      .irs--shiny .irs-handle { background: #1e90c8 !important; border-color: #1e90c8 !important; }
+      .irs--shiny .irs-from, .irs--shiny .irs-to, .irs--shiny .irs-single {
+        background: #1a3a5c !important;
+        font-family: 'DM Sans', sans-serif !important;
+        font-size: 0.78rem !important;
+      }
+
+      .radio-btn-group .shiny-input-container { margin-bottom: 0; }
+      .radio-btn-group label { font-size: 0.88rem; color: #3a4a5c; }
+
+      .stat-card {
+        background: linear-gradient(135deg, #0a1628, #1a3a5c);
+        color: white;
+        border-radius: 10px;
+        padding: 14px 16px;
+        text-align: center;
+      }
+      .stat-number {
+        font-family: 'DM Serif Display', serif;
+        font-size: 1.8rem;
+        line-height: 1;
+      }
+      .stat-label {
+        font-size: 0.7rem;
+        opacity: 0.65;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 4px;
+      }
+
+      /* ── Content area ── */
+      .content-panel {
+        flex: 1;
+        padding: 28px 32px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      /* ── Cards ── */
+      .card {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #e4e9f0;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      }
+      .card-header {
+        padding: 18px 22px 14px;
+        border-bottom: 1px solid #eef1f5;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .card-title {
+        font-family: 'DM Serif Display', serif;
+        font-size: 1.15rem;
+        color: #1a2332;
+      }
+      .card-subtitle {
+        font-size: 0.78rem;
+        color: #8a96a3;
+        margin-top: 2px;
+      }
+      .card-body { padding: 4px 0; }
+
+      /* ── Pool detail panel ── */
+      .pool-detail {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #e4e9f0;
+        padding: 22px 24px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      }
+      .pool-name {
+        font-family: 'DM Serif Display', serif;
+        font-size: 1.4rem;
+        color: #1a2332;
+        margin-bottom: 4px;
+      }
+      .pool-effect-badge {
+        display: inline-block;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-bottom: 18px;
+      }
+      .badge-fast { background: #e8f4fd; color: #0d5c8a; }
+      .badge-slow { background: #fef0f0; color: #c0392b; }
+
+      .char-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .char-item {
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 12px 14px;
+        border: 1px solid #eef1f5;
+      }
+      .char-value {
+        font-size: 1.3rem;
+        font-weight: 600;
+        color: #1a2332;
+        font-family: 'DM Serif Display', serif;
+      }
+      .char-label {
+        font-size: 0.7rem;
+        color: #8a96a3;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-top: 2px;
+      }
+
+      /* ── Table ── */
+      .pool-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      .pool-table th {
+        text-align: left;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #6b7a8d;
+        padding: 10px 16px;
+        background: #f8fafc;
+        border-bottom: 1px solid #eef1f5;
+        cursor: pointer;
+      }
+      .pool-table td {
+        padding: 11px 16px;
+        border-bottom: 1px solid #f0f3f7;
+        color: #2c3e50;
+        vertical-align: middle;
+      }
+      .pool-table tr:last-child td { border-bottom: none; }
+      .pool-table tr:hover td { background: #f8fafc; cursor: pointer; }
+      .pool-table tr.selected td { background: #eaf5fc; }
+
+      .rank-num {
+        font-weight: 700;
+        color: #8a96a3;
+        font-size: 0.8rem;
+        width: 32px;
+        display: inline-block;
+      }
+      .effect-pill {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 0.78rem;
+        font-weight: 600;
+      }
+      .pill-fast { background: #e8f4fd; color: #0d5c8a; }
+      .pill-slow { background: #fef0f0; color: #c0392b; }
+
+      .indoor-dot {
+        display: inline-block;
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+      .dot-indoor { background: #1e90c8; }
+      .dot-outdoor { background: #e67e22; }
+
+      /* ── Tabs ── */
+      .nav-tabs { border-bottom: 2px solid #eef1f5 !important; padding: 0 22px; }
+      .nav-tabs > li > a {
+        font-family: 'DM Sans', sans-serif !important;
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+        color: #8a96a3 !important;
+        border: none !important;
+        border-bottom: 2px solid transparent !important;
+        margin-bottom: -2px !important;
+        padding: 12px 16px !important;
+        border-radius: 0 !important;
+        background: none !important;
+      }
+      .nav-tabs > li.active > a {
+        color: #1a2332 !important;
+        border-bottom-color: #1e90c8 !important;
+        background: none !important;
+      }
+      .tab-content { padding: 0; }
+
+      /* ── Plot container ── */
+      .shiny-plot-output { width: 100% !important; }
+
+      /* ── No selection message ── */
+      .no-selection {
+        text-align: center;
+        padding: 60px 20px;
+        color: #8a96a3;
+      }
+      .no-selection-icon { font-size: 2.5rem; margin-bottom: 12px; }
+      .no-selection-text { font-size: 0.9rem; }
+
+      /* ── Footer ── */
+      .app-footer {
+        background: #f0f4f8;
+        border-top: 1px solid #dde3eb;
+        padding: 12px 48px;
+        font-size: 0.75rem;
+        color: #8a96a3;
+        display: flex;
+        justify-content: space-between;
+      }
+    "))
+  ),
+
+  # Header
+  div(class = "app-header",
+    div(class = "header-badge", "NCAA Swimming Analytics"),
+    div(class = "header-title", "Pool Performance Explorer"),
+    div(class = "header-sub",
+        "Estimated venue effects on standardized swim time \u2014 2021\u20132026 Women\u2019s NCAA Seasons")
+  ),
+
+  # Body
+  div(class = "main-container",
+
+    # ── Sidebar ──
+    div(class = "sidebar-panel",
+
+      # Stats
+      div(class = "stat-card",
+        div(class = "stat-number", textOutput("n_pools", inline = TRUE)),
+        div(class = "stat-label", "Pools in View")
+      ),
+
+      # Filters
+      div(class = "filter-group",
+        div(class = "filter-label", "Pool Type"),
+        div(class = "radio-btn-group",
+          radioButtons("indoor_filter", label = NULL,
+            choices = list("All Pools" = "all",
+                           "Indoor Only" = "indoor",
+                           "Outdoor Only" = "outdoor"),
+            selected = "all")
+        )
+      ),
+
+      div(class = "filter-group",
+        div(class = "filter-label", "Speed Direction"),
+        div(class = "radio-btn-group",
+          radioButtons("speed_filter", label = NULL,
+            choices = list("All" = "all",
+                           "Faster than Average" = "fast",
+                           "Slower than Average" = "slow"),
+            selected = "all")
+        )
+      ),
+
+      div(class = "filter-group",
+        div(class = "filter-label", "Facility Age (years)"),
+        sliderInput("age_filter", label = NULL,
+                    min = 0, max = 60, value = c(0, 60), step = 5)
+      ),
+
+      div(class = "filter-group",
+        div(class = "filter-label", "Sort Rankings By"),
+        selectInput("sort_by", label = NULL,
+                    choices = list(
+                      "Pool Effect (fastest first)" = "effect",
+                      "Facility Age" = "Age_years",
+                      "Pool Depth" = "Depth_in",
+                      "Altitude" = "Altitude_ft"
+                    ),
+                    selected = "effect")
+      )
+    ),
+
+    # ── Main content ──
+    div(class = "content-panel",
+
+      # Top row: ranking plot + detail panel
+      fluidRow(
+        column(7,
+          div(class = "card",
+            div(class = "card-header",
+              div(
+                div(class = "card-title", "Pool Speed Rankings"),
+                div(class = "card-subtitle",
+                    "Negative effect = faster pool after controlling for athlete and team quality")
+              )
+            ),
+            div(class = "card-body",
+              plotOutput("rankingPlot", height = "480px",
+                         click = "plot_click")
+            )
+          )
+        ),
+        column(5,
+          uiOutput("poolDetailUI")
+        )
+      ),
+
+      # Bottom row: characteristics table
+      div(class = "card",
+        div(class = "card-header",
+          div(
+            div(class = "card-title", "Facility Characteristics"),
+            div(class = "card-subtitle",
+                "Click any row or bar to inspect a pool \u2014 click column headers to sort")
+          )
+        ),
+        div(class = "card-body",
+          div(style = "overflow-x: auto;",
+          DT::dataTableOutput("charTable")
+          )
+        )
+      )
+    )
+  ),
+
+  # Footer
+  div(class = "app-footer",
+    span("Pool Advantage: Facility Characteristics and Performance in NCAA Swimming \u2014 Lily Cramer, Rice University 2026"),
+    span("Data: USA Swimming Top 500, 2021\u20132026 Seasons")
+  )
+)
+
+# ── Server ────────────────────────────────────────────────────────────────────
+server <- function(input, output, session) {
+
+  # Reactive filtered data
+  filtered_pools <- reactive({
+    df <- pool_df
+
+    if (input$indoor_filter == "indoor")  df <- df %>% filter(Indoor == TRUE)
+    if (input$indoor_filter == "outdoor") df <- df %>% filter(Indoor == FALSE)
+    if (input$speed_filter == "fast") df <- df %>% filter(effect < 0)
+    if (input$speed_filter == "slow") df <- df %>% filter(effect >= 0)
+
+    df <- df %>%
+      filter(Age_years >= input$age_filter[1],
+             Age_years <= input$age_filter[2])
+
+    df <- df[order(df[[input$sort_by]]), ]
+    df
+  })
+
+  # Selected pool (click on plot or table)
+  selected_pool <- reactiveVal(NULL)
+
+  # Pool count
+  output$n_pools <- renderText({ nrow(filtered_pools()) })
+
+  # ── Ranking plot ──
+  output$rankingPlot <- renderPlot({
+    df <- filtered_pools()
+    if (is.null(df) || nrow(df) == 0) return(NULL)
+
+    df <- df[order(df$effect), ]
+    df$direction <- ifelse(df$effect < 0, "Faster", "Slower")
+    df$LOCATION  <- factor(df$LOCATION, levels = df$LOCATION)
+
+    ggplot(df, aes(x = effect, y = LOCATION, color = direction)) +
+      geom_vline(xintercept = 0, linetype = "dashed",
+                 color = "#ccd3db", linewidth = 0.8) +
+      geom_segment(aes(x = 0, xend = effect,
+                       y = LOCATION, yend = LOCATION),
+                   alpha = 0.6, linewidth = 1.1) +
+      geom_point(size = 3, alpha = 0.85) +
+      scale_color_manual(values = c("Faster" = "#1e90c8",
+                                    "Slower" = "#e05c4b"),
+                         guide = "none") +
+      scale_x_continuous(
+        labels = function(x) sprintf("%+.2f", x),
+        expand = expansion(mult = c(0.05, 0.15))
+      ) +
+      labs(x = "Estimated Pool Effect (SD units)", y = NULL) +
+      theme_minimal(base_family = "sans") +
+      theme(
+        axis.text.y        = element_text(size = 9, color = "#2c3e50"),
+        axis.text.x        = element_text(size = 8, color = "#6b7a8d"),
+        axis.title.x       = element_text(size = 8.5, color = "#6b7a8d",
+                                           margin = margin(t = 8)),
+        panel.grid.major.y = element_line(color = "#f0f3f7"),
+        panel.grid.major.x = element_line(color = "#eef1f5"),
+        panel.grid.minor   = element_blank(),
+        plot.background    = element_rect(fill = "white", color = NA),
+        plot.margin        = margin(16, 20, 16, 16)
+      )
+  }, bg = "white")
+
+  # Handle plot clicks
+  observeEvent(input$plot_click, {
+    df <- filtered_pools() %>%
+      arrange(effect) %>%
+      mutate(LOCATION = factor(LOCATION, levels = LOCATION))
+
+    clicked_y <- input$plot_click$y
+    levels_vec <- levels(df$LOCATION)
+    idx <- round(clicked_y)
+    if (idx >= 1 && idx <= length(levels_vec)) {
+      selected_pool(levels_vec[idx])
+    }
+  })
+
+  # ── Pool detail panel ──
+  output$poolDetailUI <- renderUI({
+    pool <- selected_pool()
+
+    if (is.null(pool)) {
+      return(div(class = "pool-detail",
+        style = "height: 100%; display: flex; align-items: center;
+                 justify-content: center;",
+        div(class = "no-selection",
+          div(class = "no-selection-icon", "\U0001F3CA"),
+          div(class = "no-selection-text",
+              "Click a pool in the chart to see its characteristics")
+        )
+      ))
+    }
+
+    d <- pool_df %>% filter(LOCATION == pool)
+    if (nrow(d) == 0) return(NULL)
+
+    eff   <- d$effect
+    fast  <- eff < 0
+    badge <- if (fast) "badge-fast" else "badge-slow"
+    badge_text <- if (fast) {
+      sprintf("\u25BC %.3f SD faster than average", abs(eff))
+    } else {
+      sprintf("\u25B2 %.3f SD slower than average", abs(eff))
+    }
+
+    div(class = "pool-detail",
+      div(class = "pool-name", pool),
+      div(class = paste("pool-effect-badge", badge), badge_text),
+
+      div(class = "char-grid",
+        div(class = "char-item",
+          div(class = "char-value", paste0(d$Depth_in, '"')),
+          div(class = "char-label", "Pool Depth")
+        ),
+        div(class = "char-item",
+          div(class = "char-value", paste0(d$Altitude_ft, " ft")),
+          div(class = "char-label", "Altitude")
+        ),
+        div(class = "char-item",
+          div(class = "char-value", paste0(d$Age_years, " yrs")),
+          div(class = "char-label", "Facility Age")
+        ),
+        div(class = "char-item",
+          div(class = "char-value", d$Lanes),
+          div(class = "char-label", "Lanes")
+        ),
+        div(class = "char-item",
+          div(class = "char-value",
+              if (d$Indoor) "\U0001F3DB Indoor" else "\u2600\uFE0F Outdoor"),
+          div(class = "char-label", "Environment")
+        ),
+        div(class = "char-item",
+          div(class = "char-value",
+              sprintf("%+.3f", eff)),
+          div(class = "char-label", "Pool Effect")
+        )
+      ),
+
+      # Mini contribution bar chart
+      plotOutput("contributionPlot", height = "200px")
+    )
+  })
+
+  output$contributionPlot <- renderPlot({
+    pool <- selected_pool()
+    if (is.null(pool)) return(NULL)
+
+    d <- pool_df %>% filter(LOCATION == pool)
+    if (nrow(d) == 0) return(NULL)
+
+    # Build contribution data using approximate coefficients from the model.
+    # Replace these with your actual fixef() values.
+    coefs <- c(
+      "Indoor Pool"      = -0.245 / ifelse(d$Indoor, 1, -1),
+      "Altitude"         = -0.000196 * d$Altitude_ft,
+      "Facility Age"     = -0.0065  * d$Age_years,
+      "Pool Depth"       =  0.00135 * d$Depth_in,
+      "Number of Lanes"  =  0.006   * (d$Lanes - 9.5)
+    )
+
+    contrib <- data.frame(
+      term    = names(coefs),
+      contrib = as.numeric(coefs),
+      stringsAsFactors = FALSE
+    ) %>%
+      mutate(direction = ifelse(contrib < 0, "Faster", "Slower")) %>%
+      arrange(contrib)
+
+    ggplot(contrib, aes(x = contrib, y = reorder(term, contrib),
+                        fill = direction)) +
+      geom_col(width = 0.6) +
+      geom_vline(xintercept = 0, color = "#ccd3db", linewidth = 0.7) +
+      geom_text(aes(label = sprintf("%+.3f", contrib),
+                    hjust = ifelse(contrib < 0, 1.2, -0.2)),
+                size = 3, color = "#4a5568") +
+      scale_fill_manual(values = c("Faster" = "#1e90c8",
+                                   "Slower" = "#e05c4b"),
+                        guide = "none") +
+      labs(x = NULL, y = NULL,
+           title = "Characteristic Contributions") +
+      theme_minimal(base_family = "sans") +
+      theme(
+        axis.text.y     = element_text(size = 8.5, color = "#2c3e50"),
+        axis.text.x     = element_blank(),
+        axis.ticks      = element_blank(),
+        panel.grid      = element_blank(),
+        plot.title      = element_text(size = 9, color = "#6b7a8d",
+                                        face = "bold",
+                                        margin = margin(b = 8)),
+        plot.background = element_rect(fill = "white", color = NA),
+        plot.margin     = margin(8, 16, 4, 8)
+      )
+  }, bg = "white")
+
+  # ── Characteristics table ──
+  output$charTable <- DT::renderDataTable({
+    df <- filtered_pools() %>%
+      mutate(
+        Rank     = row_number(),
+        Speed    = ifelse(effect < 0,
+                          paste0("\u25BC ", sprintf("%.3f", abs(effect))),
+                          paste0("\u25B2 ", sprintf("%.3f", abs(effect)))),
+        Type     = ifelse(Indoor, "Indoor", "Outdoor"),
+        `Depth (in)`  = Depth_in,
+        `Alt (ft)`    = Altitude_ft,
+        `Age (yrs)`   = Age_years,
+        Lanes    = Lanes
+      ) %>%
+      select(Rank, Pool = LOCATION, Speed, Type,
+             `Depth (in)`, `Alt (ft)`, `Age (yrs)`, Lanes)
+
+    DT::datatable(df,
+      rownames  = FALSE,
+      selection = "single",
+      options   = list(
+        pageLength  = 15,
+        dom         = "t",
+        scrollX     = TRUE,
+        columnDefs  = list(list(className = "dt-center",
+                                targets   = c(0, 2, 3, 4, 5, 6, 7)))
+      ),
+      class = "compact stripe hover"
+    )
+  })
+}
+
+# ── Run ───────────────────────────────────────────────────────────────────────
+shinyApp(ui = ui, server = server)
+
+```
+
+
+
+
+```{r}
+
+shiny::runApp("~/Downloads/app_2.R")
+```
+
+
+```{r}
+dir.create("~/Downloads/ncaa-pool-effects")
+
+# Copy all your files in
+file.copy("~/Downloads/ncaa_pool_app/app.R", 
+          "~/Downloads/ncaa-pool-effects/app.R")
+file.copy("~/Downloads/ncaa_pool_app/pool_df.rds",
+          "~/Downloads/ncaa-pool-effects/pool_df.rds")
+file.copy("~/Downloads/main.tex",
+          "~/Downloads/ncaa-pool-effects/main.tex")
+file.copy("~/Downloads/references.bib",
+          "~/Downloads/ncaa-pool-effects/references.bib")
+# Copy your R analysis script too
+file.copy("~/Downloads/your_analysis_script.R",
+          "~/Downloads/ncaa-pool-effects/analysis.R")
+
+```
+
